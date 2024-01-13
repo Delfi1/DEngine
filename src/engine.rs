@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use vulkano::{instance::Instance, VulkanLibrary};
-use vulkano::device::Device;
+use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, QueueCreateInfo};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::instance::InstanceCreateInfo;
 use vulkano::swapchain::Surface;
@@ -11,10 +11,10 @@ use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 
-mod world;
-use world::World;
-
 mod rendering;
+
+mod world_system;
+use world_system::World;
 
 // Engine Settings
 pub struct Settings {
@@ -102,6 +102,42 @@ impl Engine {
 
     pub fn main_loop(&'static mut self) {
         println!("Run Main Loop...");
+
+        let device_extensions = DeviceExtensions {
+            khr_swapchain: true,
+            ..DeviceExtensions::empty()
+        };
+
+        print!("Fetching physical device...");
+        let phys_device_init_time = Instant::now();
+        let (physical_device, queue_family_index) = rendering::select_physical_device(
+            &self.instance.clone(),
+            &self.surface.clone(),
+            &device_extensions
+        );
+        print!("Done! ({}s)\n", Instant::now().duration_since(phys_device_init_time).as_secs_f32());
+
+        println!(
+            "Using device: {} (type: {:?})",
+            physical_device.properties().device_name,
+            physical_device.properties().device_type,
+        );
+
+        let (device, mut queues) = Device::new(
+            physical_device.clone(),
+            DeviceCreateInfo {
+                queue_create_infos: vec![QueueCreateInfo {
+                    queue_family_index,
+                    ..Default::default()
+                }],
+                enabled_extensions: device_extensions,
+                ..Default::default()
+            },
+        ).expect("failed to create device");
+
+        let queue = queues.next().unwrap();
+
+
 
         let handler = self.event_loop.take().unwrap();
 
