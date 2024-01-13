@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::thread;
 use std::time::Instant;
 
 use vulkano::{instance::Instance, VulkanLibrary};
@@ -42,14 +43,13 @@ impl Default for Settings {
 }
 
 pub struct Engine {
-    world: &'static mut World,
-    settings: Settings,
+    world: Arc<&'static mut World>,
+    pub settings: Settings,
 
     instance: Arc<Instance>,
     event_loop: Option<EventLoop<()>>,
     window: Arc<Window>,
-    surface: Arc<Surface>,
-
+    surface: Arc<Surface>
 }
 
 impl Engine {
@@ -100,6 +100,22 @@ impl Engine {
         }))
     }
 
+    pub fn set_world(&mut self, world: Arc<&'static mut World>) {
+        self.world = world;
+    }
+
+    pub fn get_world(&self) -> &Arc<&mut World> {
+        &self.world
+    }
+
+    pub fn draw_frame(&mut self) {
+        let mut world = self.world.clone();
+
+        thread::spawn(move || {
+
+        });
+    }
+
     pub fn main_loop(&'static mut self) {
         println!("Run Main Loop...");
 
@@ -137,14 +153,10 @@ impl Engine {
 
         let queue = queues.next().unwrap();
 
-
-
-        let handler = self.event_loop.take().unwrap();
-
         // Window events handler
+        let handler = self.event_loop.take().unwrap();
         handler.run(move |event, _target, control_flow| {
             control_flow.set_poll();
-            control_flow.set_wait();
 
             let start_time = Instant::now();
 
@@ -167,15 +179,16 @@ impl Engine {
                     let delta = {
                         let elapsed_time = Instant::now().duration_since(start_time).as_nanos() as u64;
 
+                        //println!("E time: {}", Instant::now().duration_since(start_time).as_secs_f32());
                         match 1_000_000_000 / self.settings.fps_limit >= elapsed_time {
                             true => 1_000_000_000 / self.settings.fps_limit - elapsed_time,
                             false => 0
                         }
                     };
 
-                    println!("delta: {}", delta);
                     let new_inst = start_time + std::time::Duration::from_nanos(delta);
                     *control_flow = ControlFlow::WaitUntil(new_inst); // Waiting in NS
+                    //println!("delta: {}", delta);
                 },
                 _ => ()
             }

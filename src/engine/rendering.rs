@@ -30,4 +30,3 @@ pub fn select_physical_device(instance: &Arc<Instance>, surface: &Arc<Surface>, 
         }).expect("no device available")
 }
 
-
