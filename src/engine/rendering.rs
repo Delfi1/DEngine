@@ -1,8 +1,13 @@
 use std::sync::Arc;
 use vulkano::device::{DeviceExtensions, QueueFlags};
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
+use vulkano::image::Image;
+use vulkano::image::view::ImageView;
 use vulkano::instance::Instance;
-use vulkano::swapchain::Surface;
+use vulkano::pipeline::graphics::viewport::Viewport;
+use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass};
+use vulkano::swapchain::{Surface, SwapchainCreateInfo};
+use crate::engine::rendering;
 
 
 // Select device to render;
@@ -30,3 +35,25 @@ pub fn select_physical_device(instance: &Arc<Instance>, surface: &Arc<Surface>, 
         }).expect("no device available")
 }
 
+
+pub fn window_size_dependent_setup(
+    images: &[Arc<Image>],
+    render_pass: Arc<RenderPass>,
+    viewport: &mut Viewport,
+) -> Vec<Arc<Framebuffer>> {
+    let extent = images[0].extent();
+    viewport.extent = [extent[0] as f32, extent[1] as f32];
+
+    images
+        .iter()
+        .map(|image| {
+            let view = ImageView::new_default(image.clone()).unwrap();
+            Framebuffer::new(
+                render_pass.clone(),
+                FramebufferCreateInfo {
+                    attachments: vec![view],
+                    ..Default::default()
+                },
+            ).unwrap()
+        }).collect::<Vec<_>>()
+}

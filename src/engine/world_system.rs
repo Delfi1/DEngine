@@ -2,16 +2,14 @@ use std::f64::consts::PI;
 use std::sync::Arc;
 use cgmath::{Rotation3, Vector3, Zero};
 
-trait Object {
+pub trait Object {
     fn new(_name: &str) -> &'static mut Self where Self: Sized;
 
     /// If object was deleted;
-    fn on_object_queued(&self) {}
+    fn on_object_queued(&self) { /* Empty */ }
 
     /// Object Update request;
-    fn on_update(&mut self) {
-
-    }
+    fn on_update(&mut self) { /* Empty */ }
 
     /// Object Draw request;
     fn on_draw(&self, camera: &Camera);
@@ -39,10 +37,6 @@ impl Object for Cube {
         let size = 1.0;
 
         Box::leak(Box::new(Self {name, position, velocity, size}))
-    }
-
-    fn on_update(&mut self) {
-        todo!()
     }
 
     fn on_draw(&self, camera: &Camera) {
@@ -80,7 +74,7 @@ impl Object for Sphere {
     }
 }
 
-struct Camera {
+pub struct Camera {
     position: Vector3<f64>,
     rotation: Vector3<f64>,
 
