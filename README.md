@@ -1,6 +1,6 @@
 <h1 align="center">Delfi Engine</h1>
 
-Simple physics engine. Current version: v0.0.12
+Simple physics engine. Current version: v0.0.13
 
 Current Engine structure:
 
@@ -14,12 +14,15 @@ graph TD;
     Wor --> Objs[Objects];
     
     Objs --> Cb[Cube]
-    Objs --> |For example| Sph[Sphere]
+    Objs --> |Examples| Sph[Sphere]
     Objs --> Another[...]
 
     Cb --> Data[Position, \nRotation, \nScale, \n... ]
-    Sph --> Data
+    Sph --> |Object Data| Data
     Another --> Data
+    
+    Data --> |Object Callbacks| Callbacks[on_draw, \non_update, \n...]
+
 ```
 
 TODO:

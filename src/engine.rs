@@ -1,12 +1,12 @@
 use std::sync::Arc;
-use std::thread;
 use std::time::Instant;
 
-use vulkano::{instance::Instance, VulkanLibrary};
+use vulkano::{instance::Instance, single_pass_renderpass, VulkanLibrary};
+use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, QueueCreateInfo};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::instance::InstanceCreateInfo;
-use vulkano::swapchain::Surface;
+use vulkano::swapchain::{Surface, Swapchain, SwapchainCreateInfo};
 use winit::dpi::PhysicalSize;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -59,21 +59,20 @@ impl Engine {
 
         let event_loop = EventLoop::new();
 
-        print!("Initializing Vulkan library... ");
-        let lib_init_time = Instant::now();
-        let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
-        let required_extensions = Surface::required_extensions(&event_loop);
-        print!("Done! ({}s)\n", Instant::now().duration_since(lib_init_time).as_secs_f32());
-
         print!("Creating Instance... ");
         let instance_init_time = Instant::now();
-        let instance = Instance::new(
-            library,
-            InstanceCreateInfo {
-                enabled_extensions: required_extensions,
-                ..Default::default()
-            },
-        ).expect("failed to create instance");
+        let instance = {
+            let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
+            let required_extensions = Surface::required_extensions(&event_loop);
+
+            Instance::new(
+                library,
+                InstanceCreateInfo {
+                    enabled_extensions: required_extensions,
+                    ..Default::default()
+                },
+            ).expect("failed to create instance")
+        };
         print!("Done! ({}s)\n", Instant::now().duration_since(instance_init_time).as_secs_f32());
 
         print!("Creating window... ");
@@ -109,11 +108,7 @@ impl Engine {
     }
 
     pub fn draw_frame(&mut self) {
-        let mut world = self.world.clone();
 
-        thread::spawn(move || {
-
-        });
     }
 
     pub fn main_loop(&'static mut self) {
@@ -153,6 +148,60 @@ impl Engine {
 
         let queue = queues.next().unwrap();
 
+        let (mut swapchain, images) = {
+            let caps = device
+                .physical_device()
+                .surface_capabilities(&self.surface, Default::default())
+                .unwrap();
+
+            let usage = caps.supported_usage_flags;
+            let alpha = caps.supported_composite_alpha
+                .into_iter()
+                .next()
+                .unwrap();
+
+            let image_format = Some(
+                device
+                    .physical_device()
+                    .surface_formats(&self.surface, Default::default())
+                    .unwrap()[0].0,
+            );
+
+            let image_extent: [u32; 2] = self.window.inner_size().into();
+
+            Swapchain::new(
+                device.clone(),
+                self.surface.clone(),
+                SwapchainCreateInfo {
+                    min_image_count: caps.min_image_count,
+                    image_format: image_format.unwrap(),
+                    image_extent,
+                    image_usage: usage,
+                    composite_alpha: alpha,
+                    ..Default::default()
+                },
+            ).unwrap()
+        };
+
+        let command_buffer_allocator =
+            StandardCommandBufferAllocator::new(device.clone(), Default::default());
+
+        let render_pass = single_pass_renderpass!(
+            device.clone(),
+            attachments: {
+                color: {
+                    format: swapchain.image_format(),
+                    samples: 1,
+                    load_op: Clear,
+                    store_op: Store
+                },
+            },
+            pass: {
+                color: [color],
+                depth_stencil: {}
+            },
+        ).unwrap();
+
         // Window events handler
         let handler = self.event_loop.take().unwrap();
         handler.run(move |event, _target, control_flow| {
@@ -176,6 +225,7 @@ impl Engine {
                     println!("Closing Application...");
                 },
                 ControlFlow::Poll => {
+
                     let delta = {
                         let elapsed_time = Instant::now().duration_since(start_time).as_nanos() as u64;
 
@@ -185,6 +235,10 @@ impl Engine {
                             false => 0
                         }
                     };
+
+                    let fps = (1_000_000_000_f64 / delta as f64) as u64;
+
+                    self.window.set_title(&*format!("DEngine fps: {}", fps));
 
                     let new_inst = start_time + std::time::Duration::from_nanos(delta);
                     *control_flow = ControlFlow::WaitUntil(new_inst); // Waiting in NS

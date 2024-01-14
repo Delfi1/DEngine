@@ -9,10 +9,12 @@ trait Object {
     fn on_object_queued(&self) {}
 
     /// Object Update request;
-    fn on_update(&mut self);
+    fn on_update(&mut self) {
+
+    }
 
     /// Object Draw request;
-    fn on_draw(&self);
+    fn on_draw(&self, camera: &Camera);
 }
 
 // Objects;
@@ -43,7 +45,7 @@ impl Object for Cube {
         todo!()
     }
 
-    fn on_draw(&self) {
+    fn on_draw(&self, camera: &Camera) {
         todo!()
     }
 }
@@ -73,7 +75,7 @@ impl Object for Sphere {
         todo!()
     }
 
-    fn on_draw(&self) {
+    fn on_draw(&self, camera: &Camera) {
         todo!()
     }
 }
