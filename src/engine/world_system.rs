@@ -9,7 +9,7 @@ pub trait Object {
     fn on_object_queued(&self) { /* Empty */ }
 
     /// Object Update request;
-    fn on_update(&mut self) { /* Empty */ }
+    fn on_update(&mut self, delta: f64) { /* Empty */ }
 
     /// Object Draw request;
     fn on_draw(&self, camera: &Camera);
@@ -65,7 +65,7 @@ impl Object for Sphere {
         Box::leak(Box::new(Self {name, position, velocity, radius}))
     }
 
-    fn on_update(&mut self) {
+    fn on_update(&mut self, delta: f64) {
         todo!()
     }
 
@@ -78,6 +78,8 @@ pub struct Camera {
     position: Vector3<f64>,
     rotation: Vector3<f64>,
 
+    velocity: Vector3<f64>,
+
     fov: f64
 }
 
@@ -85,7 +87,13 @@ impl Camera {
     pub fn new(position: Vector3<f64>, rotation: Vector3<f64>, fov_degrees: f64) -> Self {
         let fov = fov_degrees.to_radians();
 
-        Self {position, rotation, fov}
+        let velocity = Vector3::new(0.0, 0.0, 0.0);
+
+        Self {position, rotation, velocity, fov}
+    }
+
+    pub fn on_update(&mut self, delta: f64) {
+        self.position += self.velocity
     }
 }
 
@@ -97,11 +105,13 @@ impl Default for Camera {
 
         let fov = 70.0_f64.to_radians();
 
-        Self {position, rotation, fov}
+        let velocity = Vector3::new(0.0, 0.0,0.0);
+
+        Self {position, rotation, velocity, fov}
     }
 }
 
-/// World;
+/// World struct;
 pub struct World {
     name: &'static str,
     camera: Camera,
@@ -127,11 +137,17 @@ impl World {
         &mut self.objects
     }
 
-    pub fn update_world(&mut self) {
-        //self.camera
+    pub fn update_world(&mut self, delta: f64) {
+        self.camera.on_update(delta);
 
         for object in &mut self.objects {
-            object.on_update();
+            object.on_update(delta);
+        }
+    }
+
+    pub fn draw_world(&self) {
+        for object in &self.objects {
+            object.on_draw(&self.camera);
         }
     }
 

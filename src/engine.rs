@@ -19,9 +19,10 @@ mod rendering;
 
 mod world_system;
 use world_system::World;
-use crate::engine::rendering::window_size_dependent_setup;
+use rendering::window_size_dependent_setup;
 
 // Engine Settings
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub struct Settings {
     title: &'static str,
 
@@ -39,8 +40,8 @@ impl Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        let size = PhysicalSize::new(700, 500);
-        let min_size = PhysicalSize::new(350, 250);
+        let size = PhysicalSize::new(1280, 720);
+        let min_size = PhysicalSize::new(640, 360);
 
         Self {title: "DEngine", size, min_size, fps_limit: 120 }
     }
@@ -343,6 +344,12 @@ impl Engine {
                 ControlFlow::Poll => {
                     self.window.request_redraw();
 
+                    let fps = {
+                        let _fps = 1_000_000_000_f64 / Instant::now().duration_since(start_time).as_nanos() as f64;
+
+                        _fps.clamp(0.0, self.settings.fps_limit as f64) as u64
+                    };
+
                     let delta = {
                         let elapsed_time = Instant::now().duration_since(start_time).as_nanos() as u64;
 
@@ -353,8 +360,12 @@ impl Engine {
                         }
                     };
 
-                    // TODO: Fps counter
-                    //self.window.set_title(&*format!("DEngine fps: {}", fps));
+                    let delta_ms = match delta == 0 {
+                        true => 0u64,
+                        false => 1_000_000 / delta
+                    };
+
+                    self.window.set_title(&*format!("{} v{}; fps: {}; dt: {}", self.settings.title, VERSION, fps, delta_ms));
 
                     let new_inst = start_time + std::time::Duration::from_nanos(delta);
                     *control_flow = ControlFlow::WaitUntil(new_inst); // Waiting in NS

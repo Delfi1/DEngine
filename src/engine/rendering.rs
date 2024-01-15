@@ -35,7 +35,6 @@ pub fn select_physical_device(instance: &Arc<Instance>, surface: &Arc<Surface>, 
         }).expect("no device available")
 }
 
-
 pub fn window_size_dependent_setup(
     images: &[Arc<Image>],
     render_pass: Arc<RenderPass>,

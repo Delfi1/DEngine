@@ -1,6 +1,6 @@
 [package]
 name = "DEngine"
-version = "0.0.14"
+version = "0.0.15"
 edition = "2021"
 authors = ["Delfi"]
 homepage = "https://github.com/Delfi1/DEngine"
@@ -11,6 +11,7 @@ opt-level = 3
 [dependencies]
 vulkano = "*"
 vulkano-shaders = "*"
+vulkano-util = "*"
 
 cgmath = { version = "*", features = ["serde"] }
 winit = "0.28.7"
