@@ -1,6 +1,6 @@
-use std::f64::consts::PI;
+
 use std::sync::Arc;
-use cgmath::{Rotation3, Vector3, Zero};
+use cgmath::{Vector3, Zero};
 
 pub trait Object {
     fn new(_name: &str) -> &'static mut Self where Self: Sized;
@@ -9,7 +9,7 @@ pub trait Object {
     fn on_object_queued(&self) { /* Empty */ }
 
     /// Object Update request;
-    fn on_update(&mut self, delta: f64) { /* Empty */ }
+    fn on_update(&mut self, _delta: f64) { /* Empty */ }
 
     /// Object Draw request;
     fn on_draw(&self, camera: &Camera);
@@ -39,7 +39,7 @@ impl Object for Cube {
         Box::leak(Box::new(Self {name, position, velocity, size}))
     }
 
-    fn on_draw(&self, camera: &Camera) {
+    fn on_draw(&self, _camera: &Camera) {
         todo!()
     }
 }
@@ -65,11 +65,11 @@ impl Object for Sphere {
         Box::leak(Box::new(Self {name, position, velocity, radius}))
     }
 
-    fn on_update(&mut self, delta: f64) {
+    fn on_update(&mut self, _delta: f64) {
         todo!()
     }
 
-    fn on_draw(&self, camera: &Camera) {
+    fn on_draw(&self, _camera: &Camera) {
         todo!()
     }
 }
@@ -92,7 +92,7 @@ impl Camera {
         Self {position, rotation, velocity, fov}
     }
 
-    pub fn on_update(&mut self, delta: f64) {
+    pub fn on_update(&mut self, _delta: f64) {
         self.position += self.velocity
     }
 }

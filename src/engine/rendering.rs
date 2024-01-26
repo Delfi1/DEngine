@@ -1,17 +1,27 @@
 use std::sync::Arc;
-use vulkano::device::{DeviceExtensions, QueueFlags};
+use vulkano::buffer::{BufferContents, Subbuffer};
+
+use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
+use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
+use vulkano::device::{DeviceExtensions, Queue, QueueFlags};
 use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
 use vulkano::image::Image;
 use vulkano::image::view::ImageView;
 use vulkano::instance::Instance;
+use vulkano::memory::allocator::{StandardMemoryAllocator};
+use vulkano::pipeline::{ComputePipeline, PipelineLayout, PipelineShaderStageCreateInfo};
 use vulkano::pipeline::graphics::viewport::Viewport;
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass};
-use vulkano::swapchain::{Surface, SwapchainCreateInfo};
-use crate::engine::rendering;
+
+use vulkano::swapchain::{Surface};
+
+use vulkano::pipeline::compute::ComputePipelineCreateInfo;
+use vulkano::pipeline::graphics::vertex_input::Vertex;
+use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
 
 
 // Select device to render;
-pub fn select_physical_device(instance: &Arc<Instance>, surface: &Arc<Surface>, device_extensions: &DeviceExtensions, ) -> (Arc<PhysicalDevice>, u32) {
+pub fn select_physical_device(instance: &Arc<Instance>, surface: &Arc<Surface>, device_extensions: &DeviceExtensions, ) -> (Arc<PhysicalDevice>, u64) {
     instance
         .enumerate_physical_devices()
         .expect("could not enumerate devices")
@@ -24,7 +34,7 @@ pub fn select_physical_device(instance: &Arc<Instance>, surface: &Arc<Surface>, 
                     q.queue_flags.contains(QueueFlags::GRAPHICS)
                         && p.surface_support(i as u32, &surface).unwrap_or(false)
                 })
-                .map(|q| (p, q as u32))
+                .map(|q| (p, q as u64))
         })
         .min_by_key(|(p, _)| match p.properties().device_type {
             PhysicalDeviceType::DiscreteGpu => 0,

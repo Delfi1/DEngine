@@ -1,6 +1,10 @@
 <h1 align="center">Delfi Engine</h1>
 
-Simple physics engine. Current version: v0.0.15
+Simple physics engine. Current version: v0.0.16
+
+Dependencies:
+1) [Rust](https://www.rust-lang.org/tools/install)
+2) [Ninja Build](https://ninja-build.org)
 
 Current Engine structure (Graph):
 ```mermaid
@@ -25,13 +29,16 @@ graph TD;
 
 How Render Loop works (Graph):
 ```mermaid
-graph LR;
-    Frame_S[Frame Start] --> WE[Window Events] --> Update[Update \nWorld]; 
-    Update --> Draw[Draw World\n objects] --> Wait[Waiting for\n next frame] --> Frame_E[Frame End] --> Frame_S;
+graph TD;
+    Frame;
+    Frame --> Start;
+    Start --> OD["Collect objects data"]
+    OD --> Pipeline;
+    Pipeline --> Future;
+    Future --> End;
+    End --> Frame
 ```
 
 TODO:
-1. [x] Engine, World struct;
-2. [x] Simple Object trait;
-3. [x] Window drawing;
-4. [ ] Code refactoring;
+1. [x] Code refactoring;
+2. [ ] Create *Render loop*;

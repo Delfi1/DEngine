@@ -1,378 +1,121 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use vulkano::{instance::Instance, single_pass_renderpass, sync, Validated, VulkanError, VulkanLibrary};
-use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo};
-use vulkano::device::{Device, DeviceCreateInfo, DeviceExtensions, QueueCreateInfo};
-use vulkano::device::physical::PhysicalDevice;
-use vulkano::instance::InstanceCreateInfo;
-use vulkano::pipeline::graphics::viewport::Viewport;
-use vulkano::swapchain::{acquire_next_image, Surface, Swapchain, SwapchainCreateInfo, SwapchainPresentInfo};
-use vulkano::sync::GpuFuture;
-use winit::dpi::PhysicalSize;
-use winit::event::{Event, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::{Window, WindowBuilder};
+use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
 
+use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
+use vulkano::device::{Queue};
+use vulkano::memory::allocator::StandardMemoryAllocator;
+use vulkano_util::renderer::VulkanoWindowRenderer;
+use vulkano_util::window::VulkanoWindows;
+use winit::dpi::PhysicalSize;
 mod rendering;
 
 mod world_system;
 use world_system::World;
-use rendering::window_size_dependent_setup;
 
 // Engine Settings
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub struct Settings {
     title: &'static str,
 
     size: PhysicalSize<u32>,
     min_size: PhysicalSize<u32>,
 
-    fps_limit: u64
+    fps_limit: u64,
+    compute_time: Instant
 }
 
 impl Settings {
     pub fn new(title: &'static str, size: PhysicalSize<u32>, min_size: PhysicalSize<u32>, fps_limit: u64) -> Self {
-        Self {title, size, min_size, fps_limit}
+        let compute_time = Instant::now();
+
+        Self {title, size, min_size, fps_limit, compute_time}
     }
 }
 
 impl Default for Settings {
     fn default() -> Self {
+        let compute_time = Instant::now();
+
         let size = PhysicalSize::new(1280, 720);
         let min_size = PhysicalSize::new(640, 360);
 
-        Self {title: "DEngine", size, min_size, fps_limit: 120 }
+        Self {title: "Engine", size, min_size, fps_limit: 120, compute_time}
     }
 }
 
-pub struct Engine {
+pub struct EngineApplication {
     world: Arc<&'static mut World>,
     pub settings: Settings,
 
-    instance: Arc<Instance>,
-    event_loop: Option<EventLoop<()>>,
-    window: Arc<Window>,
-    surface: Arc<Surface>
+    windows: &'static mut VulkanoWindows
 }
 
-impl Engine {
-    pub fn new() -> &'static mut Self {
-        let world = World::new("Empty world");
+impl EngineApplication {
+    pub fn new(gfx_queue: &Arc<Queue>, windows: &'static mut VulkanoWindows) -> &'static mut Self {
         let settings = Settings::default();
+        let main_window = windows.get_primary_renderer_mut().unwrap().window();
+        main_window.set_title(settings.title);
+        main_window.set_inner_size(settings.size);
+        main_window.set_min_inner_size(Some(settings.min_size));
 
-        let event_loop = EventLoop::new();
+        let world = World::new("Default World");
 
-        print!("Creating Instance... ");
-        let instance_init_time = Instant::now();
-        let instance = {
-            let library = VulkanLibrary::new().expect("no local Vulkan library/DLL");
-            let required_extensions = Surface::required_extensions(&event_loop);
-
-            Instance::new(
-                library,
-                InstanceCreateInfo {
-                    enabled_extensions: required_extensions,
-                    ..Default::default()
-                },
-            ).expect("failed to create instance")
-        };
-        print!("Done! ({}s)\n", Instant::now().duration_since(instance_init_time).as_secs_f32());
-
-        print!("Creating window... ");
-        let window_init_time = Instant::now();
-        let window = Arc::new(WindowBuilder::new().build(&event_loop).unwrap());
-        print!("Done! ({}s)\n", Instant::now().duration_since(window_init_time).as_secs_f32());
-
-        window.set_title(settings.title);
-        window.set_inner_size(settings.size);
-        window.set_min_inner_size(Some(settings.min_size));
-
-        print!("Creating surface... ");
-        let surface_init_time = Instant::now();
-        let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
-        print!("Done! ({}s)\n", Instant::now().duration_since(surface_init_time).as_secs_f32());
+        let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(
+            gfx_queue.device().clone(),
+        ));
+        let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
+            gfx_queue.device().clone(),
+            StandardCommandBufferAllocatorCreateInfo {
+                secondary_buffer_count: 32,
+                ..Default::default()
+            },
+        ));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            gfx_queue.device().clone(),
+            Default::default(),
+        ));
 
         Box::leak(Box::new(Self {
             world,
             settings,
-            instance: instance.clone(),
-            event_loop: Some(event_loop),
-            window: window.clone(),
-            surface: surface.clone()
+            windows
         }))
     }
 
-    pub fn set_world(&mut self, world: Arc<&'static mut World>) {
-        self.world = world;
+    pub fn update_time(&mut self) {
+        self.settings.compute_time = Instant::now()
     }
 
-    pub fn get_world(&self) -> &Arc<&mut World> {
-        &self.world
+    pub fn get_time(&self) -> Instant {
+        self.settings.compute_time
     }
 
-    pub fn draw_frame(&mut self) {
+    pub fn get_delta_time(&self) -> Instant {
+        let elapsed_time = Instant::now().duration_since(self.settings.compute_time).as_nanos() as u64;
 
-    }
-
-    pub fn main_loop(&'static mut self) {
-        println!("Run Main Loop...");
-
-        let device_extensions = DeviceExtensions {
-            khr_swapchain: true,
-            ..DeviceExtensions::empty()
-        };
-
-        print!("Fetching physical device...");
-        let phys_device_init_time = Instant::now();
-        let (physical_device, queue_family_index) = rendering::select_physical_device(
-            &self.instance.clone(),
-            &self.surface.clone(),
-            &device_extensions
-        );
-        print!("Done! ({}s)\n", Instant::now().duration_since(phys_device_init_time).as_secs_f32());
-
-        println!(
-            "Using device: {} (type: {:?})",
-            physical_device.properties().device_name,
-            physical_device.properties().device_type,
-        );
-
-        let (device, mut queues) = Device::new(
-            physical_device.clone(),
-            DeviceCreateInfo {
-                queue_create_infos: vec![QueueCreateInfo {
-                    queue_family_index,
-                    ..Default::default()
-                }],
-                enabled_extensions: device_extensions,
-                ..Default::default()
-            },
-        ).expect("failed to create device");
-
-        let queue = queues.next().unwrap();
-
-        let (mut swapchain, images) = {
-            let caps = device
-                .physical_device()
-                .surface_capabilities(&self.surface, Default::default())
-                .unwrap();
-
-            let usage = caps.supported_usage_flags;
-            let alpha = caps.supported_composite_alpha
-                .into_iter()
-                .next()
-                .unwrap();
-
-            let image_format = Some(
-                device
-                    .physical_device()
-                    .surface_formats(&self.surface, Default::default())
-                    .unwrap()[0].0,
-            );
-
-            let image_extent: [u32; 2] = self.window.inner_size().into();
-
-            Swapchain::new(
-                device.clone(),
-                self.surface.clone(),
-                SwapchainCreateInfo {
-                    min_image_count: caps.min_image_count,
-                    image_format: image_format.unwrap(),
-                    image_extent,
-                    image_usage: usage,
-                    composite_alpha: alpha,
-                    ..Default::default()
-                },
-            ).unwrap()
-        };
-
-        let command_buffer_allocator =
-            StandardCommandBufferAllocator::new(device.clone(), Default::default());
-
-        let render_pass = single_pass_renderpass!(
-            device.clone(),
-            attachments: {
-                color: {
-                    format: swapchain.image_format(),
-                    samples: 1,
-                    load_op: Clear,
-                    store_op: Store
-                },
-            },
-            pass: {
-                color: [color],
-                depth_stencil: {}
-            },
-        ).unwrap();
-
-        let mut viewport = Viewport {
-            offset: [0.0, 0.0],
-            extent: [0.0, 0.0],
-            ..Viewport::default()
-        };
-
-        let mut framebuffers = window_size_dependent_setup(&images, render_pass.clone(), &mut viewport);
-
-        let mut recreate_swapchain = false;
-        let mut previous_frame_end = Some(sync::now(device.clone()).boxed());
-
-        // Window events handler
-        let handler = self.event_loop.take().unwrap();
-        handler.run(move |event, _target, control_flow| {
-            control_flow.set_poll();
-
-            let start_time = Instant::now();
-
-            match event {
-                Event::WindowEvent {
-                    event: WindowEvent::CloseRequested,
-                    ..
-                } => {
-                    control_flow.set_exit();
-                },
-                Event::RedrawRequested(_) => {
-                    // When need to draw frame
-
-                    let image_extent: [u32; 2] = self.window.inner_size().into();
-                    // If window size is zero: skip;
-                    if image_extent.contains(&0) {
-                        return;
-                    }
-
-                    let (image_index, suboptimal, acquire_future) =
-                        match acquire_next_image(swapchain.clone(), None).map_err(Validated::unwrap) {
-                            Ok(r) => r,
-                            Err(VulkanError::OutOfDate) => {
-                                recreate_swapchain = true;
-                                return;
-                            }
-                            Err(e) => panic!("failed to acquire next image: {e}"),
-                        };
-
-                    if suboptimal {
-                        recreate_swapchain = true;
-                    }
-
-                    let clear_values = vec![Some([0.0, 0.0, 0.0, 1.0].into())];
-
-                    let mut builder = AutoCommandBufferBuilder::primary(
-                        &command_buffer_allocator,
-                        queue.queue_family_index(),
-                        CommandBufferUsage::OneTimeSubmit,
-                    ).unwrap();
-
-                    builder
-                        .begin_render_pass(
-                            RenderPassBeginInfo {
-                                clear_values,
-                                ..RenderPassBeginInfo::framebuffer(
-                                    framebuffers[image_index as usize].clone(),
-                                )
-                            },
-                            SubpassBeginInfo::default(),
-                        )
-                        .unwrap()
-                        .end_render_pass(SubpassEndInfo::default())
-                        .unwrap();
-
-                    let command_buffer = builder.build().unwrap();
-
-                    let future = previous_frame_end
-                        .take()
-                        .unwrap()
-                        .join(acquire_future)
-                        .then_execute(queue.clone(), command_buffer)
-                        .unwrap()
-                        .then_swapchain_present(
-                            queue.clone(),
-                            SwapchainPresentInfo::swapchain_image_index(swapchain.clone(), image_index),
-                        )
-                        .then_signal_fence_and_flush();
-
-                    match future.map_err(Validated::unwrap) {
-                        Ok(future) => {
-                            previous_frame_end = Some(future.boxed());
-                        }
-                        Err(VulkanError::OutOfDate) => {
-                            recreate_swapchain = true;
-                            previous_frame_end = Some(sync::now(device.clone()).boxed());
-                        }
-                        Err(e) => {
-                            panic!("failed to flush future: {e}");
-                            // previous_frame_end = Some(sync::now(device.clone()).boxed());
-                        }
-                    }
-
-                    previous_frame_end.as_mut().unwrap().cleanup_finished();
-                },
-                Event::MainEventsCleared => {
-                    let image_extent: [u32; 2] = self.window.inner_size().into();
-
-                    if recreate_swapchain {
-                        // Use the new dimensions of the window.
-
-                        let (new_swapchain, new_images) = swapchain
-                            .recreate(SwapchainCreateInfo {
-                                image_extent,
-                                ..swapchain.create_info()
-                            })
-                            .expect("failed to recreate swapchain");
-
-                        swapchain = new_swapchain;
-
-                        // Because framebuffers contains a reference to the old swapchain, we need to
-                        // recreate framebuffers as well.
-                        framebuffers = window_size_dependent_setup(
-                            &new_images,
-                            render_pass.clone(),
-                            &mut viewport,
-                        );
-
-                        recreate_swapchain = false;
-                    }
-                },
-
-                _ => ()
+        let delta = {
+            match 1_000_000_000 / self.settings.fps_limit >= elapsed_time {
+                true => 1_000_000_000 / self.settings.fps_limit - elapsed_time,
+                false => 0
             }
+        };
 
-            match *control_flow {
-                ControlFlow::Exit => {
-                    println!("Closing Application...");
-                },
-                ControlFlow::Poll => {
-                    self.window.request_redraw();
+        self.settings.compute_time + std::time::Duration::from_nanos(delta)
+    }
 
-                    let fps = {
-                        let _fps = 1_000_000_000_f64 / Instant::now().duration_since(start_time).as_nanos() as f64;
+    pub fn update_title(&mut self) {
+        let window = self.windows.get_primary_renderer_mut().take().unwrap().window();
 
-                        _fps.clamp(0.0, self.settings.fps_limit as f64) as u64
-                    };
+        let size = window.inner_size();
+        let display_size = format!("{}:{}", size.width, size.height);
+        let title = format!("{}; v{}; Size: {}; ", self.settings.title, VERSION, display_size).leak();
+        window.set_title(title);
+    }
 
-                    let delta = {
-                        let elapsed_time = Instant::now().duration_since(start_time).as_nanos() as u64;
-
-                        //println!("E time: {}", Instant::now().duration_since(start_time).as_secs_f32());
-                        match 1_000_000_000 / self.settings.fps_limit >= elapsed_time {
-                            true => 1_000_000_000 / self.settings.fps_limit - elapsed_time,
-                            false => 0
-                        }
-                    };
-
-                    let delta_ms = match delta == 0 {
-                        true => 0u64,
-                        false => 1_000_000 / delta
-                    };
-
-                    self.window.set_title(&*format!("{} v{}; fps: {}; dt: {}", self.settings.title, VERSION, fps, delta_ms));
-
-                    let new_inst = start_time + std::time::Duration::from_nanos(delta);
-                    *control_flow = ControlFlow::WaitUntil(new_inst); // Waiting in NS
-                    //println!("delta: {}", delta);
-                },
-                _ => ()
-            }
-        });
+    pub fn get_renderer(&mut self) -> &mut VulkanoWindowRenderer {
+        self.windows.get_primary_renderer_mut().unwrap()
     }
 }
