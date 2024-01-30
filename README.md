@@ -1,6 +1,6 @@
 <h1 align="center">Delfi Engine</h1>
 
-Simple physics engine. Current version: v0.0.16
+Simple physics engine. Current version: v0.0.17
 
 Dependencies:
 1) [Rust](https://www.rust-lang.org/tools/install)
@@ -30,15 +30,15 @@ graph TD;
 How Render Loop works (Graph):
 ```mermaid
 graph TD;
-    Frame;
-    Frame --> Start;
-    Start --> OD["Collect objects data"]
-    OD --> Pipeline;
-    Pipeline --> Future;
-    Future --> End;
+    Frame[Start Frame];
+    Frame --> OD[Collect objects data]
+    OD --> EP[Engine Pipeline];
+    EP --> DP[Draw Pipeline];
+    DP --> End;
     End --> Frame
 ```
 
 TODO:
 1. [x] Code refactoring;
-2. [ ] Create *Render loop*;
+2. [ ] Create Context system;
+3. [ ] Create *Render loop*;

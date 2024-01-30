@@ -1,68 +1,13 @@
 use std::sync::Arc;
-use vulkano::buffer::{BufferContents, Subbuffer};
-
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
-use vulkano::device::{DeviceExtensions, Queue, QueueFlags};
-use vulkano::device::physical::{PhysicalDevice, PhysicalDeviceType};
-use vulkano::image::Image;
-use vulkano::image::view::ImageView;
-use vulkano::instance::Instance;
-use vulkano::memory::allocator::{StandardMemoryAllocator};
-use vulkano::pipeline::{ComputePipeline, PipelineLayout, PipelineShaderStageCreateInfo};
-use vulkano::pipeline::graphics::viewport::Viewport;
-use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass};
-
-use vulkano::swapchain::{Surface};
-
+use vulkano::device::Queue;
+use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::pipeline::compute::ComputePipelineCreateInfo;
-use vulkano::pipeline::graphics::vertex_input::Vertex;
-use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
+use vulkano::pipeline::{ComputePipeline, PipelineShaderStageCreateInfo};
 
+#[path="./world_system.rs"]
+mod world_system;
+use world_system::World;
 
-// Select device to render;
-pub fn select_physical_device(instance: &Arc<Instance>, surface: &Arc<Surface>, device_extensions: &DeviceExtensions, ) -> (Arc<PhysicalDevice>, u64) {
-    instance
-        .enumerate_physical_devices()
-        .expect("could not enumerate devices")
-        .filter(|p| p.supported_extensions().contains(&device_extensions))
-        .filter_map(|p| {
-            p.queue_family_properties()
-                .iter()
-                .enumerate()
-                .position(|(i, q)| {
-                    q.queue_flags.contains(QueueFlags::GRAPHICS)
-                        && p.surface_support(i as u32, &surface).unwrap_or(false)
-                })
-                .map(|q| (p, q as u64))
-        })
-        .min_by_key(|(p, _)| match p.properties().device_type {
-            PhysicalDeviceType::DiscreteGpu => 0,
-            PhysicalDeviceType::IntegratedGpu => 1,
-            PhysicalDeviceType::VirtualGpu => 2,
-            PhysicalDeviceType::Cpu => 3,
-            _ => 4,
-        }).expect("no device available")
-}
-
-pub fn window_size_dependent_setup(
-    images: &[Arc<Image>],
-    render_pass: Arc<RenderPass>,
-    viewport: &mut Viewport,
-) -> Vec<Arc<Framebuffer>> {
-    let extent = images[0].extent();
-    viewport.extent = [extent[0] as f32, extent[1] as f32];
-
-    images
-        .iter()
-        .map(|image| {
-            let view = ImageView::new_default(image.clone()).unwrap();
-            Framebuffer::new(
-                render_pass.clone(),
-                FramebufferCreateInfo {
-                    attachments: vec![view],
-                    ..Default::default()
-                },
-            ).unwrap()
-        }).collect::<Vec<_>>()
-}
+//Rendering...
