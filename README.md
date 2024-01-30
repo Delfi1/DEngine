@@ -1,6 +1,6 @@
 <h1 align="center">Delfi Engine</h1>
 
-Simple physics engine. Current version: v0.0.17
+Simple physics engine. Current version: v0.0.18
 
 Dependencies:
 1) [Rust](https://www.rust-lang.org/tools/install)

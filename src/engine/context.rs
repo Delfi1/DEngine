@@ -1,36 +1,32 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
-use winit::event::{ElementState, KeyboardInput, VirtualKeyCode};
+use winit::event::{KeyboardInput, VirtualKeyCode};
 
 pub struct TimeContext {
     init_time: Instant,
-    current_time: Instant,
+    frame_time: Instant,
     ticks: usize
 }
 
 impl TimeContext {
     pub fn new() -> Self {
-        Self {init_time: Instant::now(), current_time: Instant::now(), ticks: 0}
+        let init_time = Instant::now();
+        let frame_time = Instant::now();
+
+        Self {init_time, frame_time, ticks: 0}
     }
 
-    pub fn frame_time(&self) -> Instant {
-        self.current_time
+    pub fn get_time(&self) -> Instant {
+        self.frame_time
     }
 
     pub fn delta(&self) -> Duration {
-        Instant::now().duration_since(self.current_time)
+        Instant::now().duration_since(self.frame_time)
     }
 
     pub fn time_since_start(&self) -> Duration {
         Instant::now().duration_since(self.init_time)
-    }
-
-    pub fn average_delta(&self) -> Duration {
-        todo!()
-    }
-
-    pub fn fps(&self) -> f64 {
-        todo!()
     }
 
     pub fn ticks(&self) -> usize {
@@ -39,7 +35,7 @@ impl TimeContext {
 }
 
 pub struct KeyboardContext {
-    pressed_keys: HashSet<KeyboardInput>
+    pressed_keys: HashSet<VirtualKeyCode>
 }
 
 impl KeyboardContext {
@@ -49,20 +45,18 @@ impl KeyboardContext {
 
     pub fn is_key_pressed(&self, key: VirtualKeyCode) -> bool {
         self.pressed_keys.iter()
-            .find(|x| x.virtual_keycode == Some(key) &&
-                x.state == ElementState::Pressed)
+            .find(|x| x == &&key)
             .is_some()
     }
 
-    pub fn pressed_keys(&mut self) -> &mut HashSet<KeyboardInput> {
+    pub fn pressed_keys(&mut self) -> &mut HashSet<VirtualKeyCode> {
         &mut self.pressed_keys
     }
 
     pub fn is_keys_pressed(&self, keys: HashSet<VirtualKeyCode>) -> bool {
         for key in keys {
             if self.pressed_keys.iter()
-                .find(|x| x.virtual_keycode == Some(key) &&
-                    x.state == ElementState::Pressed)
+                .find(|x| x == &&key)
                 .is_none() {
                 return false;
             }
@@ -72,34 +66,56 @@ impl KeyboardContext {
     }
 
     pub fn release_key(&mut self, key: Option<VirtualKeyCode>) {
-        let value = *self.pressed_keys.iter()
-            .find(|x| x.virtual_keycode == key)
-            .take()
-            .unwrap();
-
-        self.pressed_keys.remove(&value);
+        self.pressed_keys.remove(&key.unwrap());
     }
 }
 
-pub struct Context {
-    pub time: TimeContext,
-    pub keyboard: KeyboardContext
+pub trait Object {
+    fn new() -> &'static mut Self where Self: Sized + Send;
+
+    fn on_update(&mut self, ctx: &EngineContext);
+    fn on_draw(&self, ctx: &EngineContext);
 }
 
-impl Context {
+pub struct WorldContext {
+    name: &'static str,
+    objects: Vec<&'static mut dyn Object>
+}
+
+impl WorldContext {
+    pub fn new(_name: &str) -> Arc<&'static mut Self> {
+        let name = _name.to_string().leak();
+
+        let mut objects: Vec<&'static mut dyn Object> = Vec::new();
+        //let cube = Cube::new()
+        //objects.push(cube)
+        Arc::new(Box::leak(Box::new(Self {name, objects})))
+    }
+
+    pub fn get_objects(&mut self) -> &mut Vec<&'static mut dyn Object> {
+        &mut self.objects
+    }
+}
+
+pub struct EngineContext {
+    pub time: TimeContext,
+    pub keyboard: KeyboardContext,
+    world: Arc<&'static mut WorldContext>
+}
+
+impl EngineContext {
     pub fn new() -> &'static mut Self {
         let time = TimeContext::new();
         let keyboard = KeyboardContext::new();
+        let world = WorldContext::new("Default World");
 
-        Box::leak(Box::new(Self {time, keyboard}))
+        Box::leak(Box::new(Self {time, keyboard, world}))
     }
 
     pub fn update(&mut self) {
         // Update time context
-        self.time.current_time = Instant::now();
+        self.time.frame_time = Instant::now();
         self.time.ticks += 1;
-
-        // Update keyboard context
 
     }
 }

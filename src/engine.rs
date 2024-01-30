@@ -1,102 +1,92 @@
 use std::collections::HashSet;
-use std::sync::Arc;
-use std::thread;
-use std::time::{Duration, Instant};
-
-use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
-
-use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
-use vulkano::device::{Queue};
-use vulkano::memory::allocator::StandardMemoryAllocator;
+use std::time::Instant;
+use vulkano::swapchain::PresentMode;
+use vulkano_util::context::{VulkanoConfig, VulkanoContext};
 use vulkano_util::renderer::VulkanoWindowRenderer;
-use vulkano_util::window::VulkanoWindows;
+use vulkano_util::window::{VulkanoWindows, WindowDescriptor};
 use winit::dpi::PhysicalSize;
 use winit::event::VirtualKeyCode;
-use winit::event_loop::ControlFlow;
+use winit::event_loop::EventLoop;
 use winit::window::{Fullscreen, Window};
-
-mod rendering;
+use crate::engine::context::EngineContext;
 
 mod context;
-use context::Context;
+mod rendering;
 
-mod world_system;
-use world_system::World;
-
-// Engine Settings
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub struct EngineSettings {
+    window_title: &'static str,
 
-pub struct Settings {
-    title: &'static str,
+    size: PhysicalSize<f32>,
+    min_size: Option<PhysicalSize<f32>>,
 
-    size: PhysicalSize<u32>,
-    min_size: PhysicalSize<u32>,
-
-    pub fps_limit: u64
+    pub fps_limit: u32
 }
 
-impl Settings {
-    pub fn new(title: &'static str, size: PhysicalSize<u32>, min_size: PhysicalSize<u32>, fps_limit: u64) -> Self {
-        Self {title, size, min_size, fps_limit}
+impl EngineSettings {
+    fn new(_title: &str) -> Self {
+        let window_title = _title.to_string().leak();
+        let size = PhysicalSize::new(1280.0, 720.0);
+        let min_size = Some(PhysicalSize::new(640.0, 360.0));
+        let fps_limit = 120;
+
+        Self {window_title, size, min_size, fps_limit}
     }
 }
-
-impl Default for Settings {
-    fn default() -> Self {
-        let size = PhysicalSize::new(1280, 720);
-        let min_size = PhysicalSize::new(640, 360);
-
-        Self {title: "Engine", size, min_size, fps_limit: 120}
-    }
-}
-
 
 pub struct EngineApplication {
-    pub world: Arc<&'static mut World>,
-    pub settings: Settings,
-    context: &'static mut Context,
-
+    pub settings: EngineSettings,
+    context: &'static mut EngineContext,
     windows: &'static mut VulkanoWindows
 }
 
 impl EngineApplication {
-    pub fn new(gfx_queue: &Arc<Queue>, windows: &'static mut VulkanoWindows) -> &'static mut Self {
-        let settings = Settings::default();
-        let main_window = windows.get_primary_renderer_mut().unwrap().window();
-        main_window.set_title(settings.title);
-        main_window.set_inner_size(settings.size);
-        main_window.set_min_inner_size(Some(settings.min_size));
+    pub fn new(event_loop: &EventLoop<()>) -> &'static mut Self {
+        let settings = EngineSettings::new("Engine");
 
-        let world = World::new("Default World");
+        print!("Creating window context... ");
+        let mut init_time = Instant::now();
+        let win_context = VulkanoContext::new(VulkanoConfig::default());
+        print!("Done! ({}s)\n", Instant::now().duration_since(init_time).as_secs_f32());
 
-        let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(
-            gfx_queue.device().clone(),
-        ));
-        let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
-            gfx_queue.device().clone(),
-            StandardCommandBufferAllocatorCreateInfo {
-                secondary_buffer_count: 32,
+        print!("Creating main window... ");
+        init_time = Instant::now();
+        let windows = Box::leak(Box::new(VulkanoWindows::default()));
+
+        windows.create_window(
+            event_loop,
+            &win_context,
+            &WindowDescriptor {
+                title: "Engine".to_string(),
+                present_mode: PresentMode::Fifo,
                 ..Default::default()
             },
-        ));
-        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
-            gfx_queue.device().clone(),
-            Default::default(),
-        ));
 
-        let context = Context::new();
+            |_| {}
+        );
+
+        print!("Done! ({}s)\n", Instant::now().duration_since(init_time).as_secs_f32());
+
+        let main_window = windows.get_primary_window().unwrap();
+        main_window.set_title(settings.window_title);
+        main_window.set_inner_size(settings.size);
+        main_window.set_min_inner_size(settings.min_size);
+
+        let context = EngineContext::new();
 
         Box::leak(Box::new(Self {
-            world,
             settings,
             context,
-
             windows
         }))
     }
 
-    pub fn match_input(&self) {
-        let inputs = &self.context.keyboard;
+    pub fn request_redraw(&mut self) {
+        //
+    }
+
+    pub fn match_input(&mut self) {
+        let inputs = &mut self.context.keyboard;
 
         if inputs.is_key_pressed(VirtualKeyCode::F11) {
             let window = self.windows.get_primary_window().unwrap();
@@ -107,6 +97,13 @@ impl EngineApplication {
             } else {
                 None
             });
+            inputs.release_key(Some(VirtualKeyCode::F11));
+        }
+
+        if inputs.is_key_pressed(VirtualKeyCode::M) {
+            let window = self.windows.get_primary_window().unwrap();
+            window.set_maximized(!window.is_maximized());
+            inputs.release_key(Some(VirtualKeyCode::M));
         }
 
         let exit_keys = HashSet::from([VirtualKeyCode::Escape, VirtualKeyCode::LShift]);
@@ -114,18 +111,6 @@ impl EngineApplication {
         if inputs.is_keys_pressed(exit_keys) {
             self.exit()
         }
-
-        //if inputs.is_key_pressed(VirtualKeyCode::Escape) {
-        //    self.exit()
-        //}
-    }
-
-    pub fn context(&mut self) -> &mut Context {
-        self.context
-    }
-
-    pub fn exit(&self) {
-        std::process::exit(0);
     }
 
     pub fn update_title(&mut self) {
@@ -136,19 +121,27 @@ impl EngineApplication {
         let display_size = format!("{}:{}", size.width, size.height);
         let aspect_ratio = renderer.aspect_ratio();
 
-        let title = format!("{}; v{}; Size: {}; AR: {}", self.settings.title, VERSION, display_size, aspect_ratio).leak();
+        let title = format!("{}; v{}; Size: {}; AR: {}", self.settings.window_title, VERSION, display_size, aspect_ratio).leak();
         window.set_title(title);
     }
 
-    pub fn request_redraw(&mut self) {
-
+    pub fn get_renderer(&mut self) -> &mut VulkanoWindowRenderer {
+        self.windows.get_primary_renderer_mut().take().unwrap()
     }
 
-    pub fn get_renderer(&mut self) -> &mut VulkanoWindowRenderer {
-        self.windows.get_primary_renderer_mut().unwrap()
+    pub fn get_context(&self) -> &EngineContext {
+        self.context
+    }
+
+    pub fn get_context_mut(&mut self) -> &mut EngineContext {
+        self.context
     }
 
     pub fn get_window(&self) -> &Window {
-        self.windows.get_primary_window().unwrap()
+        self.windows.get_primary_window().take().unwrap()
+    }
+
+    pub fn exit(&self) {
+        std::process::exit(0);
     }
 }
