@@ -8,13 +8,19 @@
 )]
 
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo};
+use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo};
+use vulkano::{sync, Validated, VulkanError};
+use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
+use vulkano::swapchain::SwapchainPresentInfo;
+use vulkano::sync::GpuFuture;
 use winit::event::{ElementState, Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
-use crate::engine::EngineApplication;
 
 mod engine;
-
+use engine::EngineApplication;
 
 fn main() {
     println!("Delfi Engine - Simple Physics Engine; \nCurrent version: v{}; \nStarting Initialization...", engine::VERSION);
@@ -46,7 +52,10 @@ fn main() {
                     },
                     WindowEvent::KeyboardInput {input, ..} => {
                         let keyboard = &mut app.get_context_mut().keyboard;
-                        //print!("{:?}", keyboard.pressed_keys());
+
+                        if input.virtual_keycode.is_none() {
+                            return;
+                        }
 
                         if input.state == ElementState::Pressed {
                             keyboard.pressed_keys().insert(input.virtual_keycode.unwrap());
@@ -60,6 +69,9 @@ fn main() {
                     WindowEvent::Resized(..) | WindowEvent::ScaleFactorChanged { .. } => renderer.resize(),
                     _ => ()
                 }
+            },
+            Event::RedrawRequested(_) => {
+                app.compute_then_render();
             },
             Event::MainEventsCleared => {
                 app.update_title();
@@ -79,7 +91,8 @@ fn main() {
                 let wait_time = time.get_time() + Duration::from_secs_f64(1.0 / app.settings.fps_limit as f64) - delta;
 
                 *control_flow = ControlFlow::WaitUntil(wait_time);
-                app.request_redraw();
+                // Draw Frame!
+                app.get_window().request_redraw();
 
                 // match input
                 app.match_input();

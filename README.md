@@ -1,6 +1,6 @@
 <h1 align="center">Delfi Engine</h1>
 
-Simple physics engine. Current version: v0.0.18
+Simple physics engine. Current version: v0.0.19
 
 Dependencies:
 1) [Rust](https://www.rust-lang.org/tools/install)
@@ -10,35 +10,42 @@ Current Engine structure (Graph):
 ```mermaid
 graph TD;
     Eng[Engine];
-    Eng --> Wor[World];
-    Eng --> Set[Settings];
-    Eng --> Win[Window, Surface];
-    Wor --> Wor_Name[Name];
-    Wor --> Objs{Objects};
-    
-    Objs --> Cb[Cube];
-    Objs --> |Examples| Sph[Sphere];
-    Objs --> Another[...];
+    Eng --> App{Application};
+    App --> Settings;
+    App --> MainLoop[Main Loop];
+    App --> Context;
+```
 
-    Cb --> Data[Position,\n Rotation,\n Scale,\n ... ];
-    Sph --> |Object Data| Data;
-    Another --> Data;
-    
-    Data --> |Object Callbacks| Callbacks[on_draw,\n on_update,\n ...];
+How Main Loop works:
+```mermaid
+graph TD;
+    MainLoop[Main Loop];
+    MainLoop --> Start;
+    Start --> Renderer;
+    Renderer --> Window;
+    Window --> MatchInput[Match Input];
+    MatchInput --> UpdateSurface[Update Surface];
+    UpdateSurface --> Update[Update Window\n World];
+    Update --> DrawFrame[Start Drawing Frame];
+    DrawFrame --> End;
+    End --> Start;
 ```
 
 How Render Loop works (Graph):
 ```mermaid
 graph TD;
-    Frame[Start Frame];
-    Frame --> OD[Collect objects data]
+    Frame[Starting Drawing Frame];
+    Frame --> OD[Collect objects data];
     OD --> EP[Engine Pipeline];
-    EP --> DP[Draw Pipeline];
-    DP --> End;
-    End --> Frame
+    EP --> PP["Physics Pipeline (soon)"];
+    PP --> DP[Draw Pipeline];
+    DP --> Future;
+    Future --> End;
+    End --> Frame;
 ```
 
 TODO:
 1. [x] Code refactoring;
-2. [ ] Create Context system;
-3. [ ] Create *Render loop*;
+2. [x] Create Context system;
+3. [x] Create simple *Render loop*;
+4. [ ] Create world update and draw logic;

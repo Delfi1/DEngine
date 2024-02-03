@@ -1,7 +1,46 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
+use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
+use vulkano::device::Queue;
+use vulkano::memory::allocator::StandardMemoryAllocator;
+use vulkano_util::context::VulkanoContext;
 use winit::event::{KeyboardInput, VirtualKeyCode};
+
+pub struct GraphicsContext {
+    pub queue: Arc<Queue>,
+    pub memory_allocator: Arc<StandardMemoryAllocator>,
+    pub command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+    pub descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
+
+    // Private
+    window_context: &'static mut VulkanoContext
+}
+
+impl GraphicsContext {
+    pub fn new(window_context: &'static mut VulkanoContext) -> Self {
+        let queue = window_context.graphics_queue().clone();
+
+        let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(
+            queue.device().clone(),
+        ));
+        let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
+            queue.device().clone(),
+            StandardCommandBufferAllocatorCreateInfo {
+                secondary_buffer_count: 32,
+                ..Default::default()
+            },
+        ));
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            queue.device().clone(),
+            Default::default(),
+        ));
+
+        Self {queue, window_context, memory_allocator, command_buffer_allocator, descriptor_set_allocator}
+    }
+}
+
 
 pub struct TimeContext {
     init_time: Instant,
@@ -70,46 +109,20 @@ impl KeyboardContext {
     }
 }
 
-pub trait Object {
-    fn new() -> &'static mut Self where Self: Sized + Send;
-
-    fn on_update(&mut self, ctx: &EngineContext);
-    fn on_draw(&self, ctx: &EngineContext);
-}
-
-pub struct WorldContext {
-    name: &'static str,
-    objects: Vec<&'static mut dyn Object>
-}
-
-impl WorldContext {
-    pub fn new(_name: &str) -> Arc<&'static mut Self> {
-        let name = _name.to_string().leak();
-
-        let mut objects: Vec<&'static mut dyn Object> = Vec::new();
-        //let cube = Cube::new()
-        //objects.push(cube)
-        Arc::new(Box::leak(Box::new(Self {name, objects})))
-    }
-
-    pub fn get_objects(&mut self) -> &mut Vec<&'static mut dyn Object> {
-        &mut self.objects
-    }
-}
-
 pub struct EngineContext {
     pub time: TimeContext,
     pub keyboard: KeyboardContext,
-    world: Arc<&'static mut WorldContext>
+    pub graphics: GraphicsContext
 }
 
 impl EngineContext {
-    pub fn new() -> &'static mut Self {
+    pub fn new(window_context: &'static mut VulkanoContext) -> &'static mut Self {
         let time = TimeContext::new();
         let keyboard = KeyboardContext::new();
-        let world = WorldContext::new("Default World");
 
-        Box::leak(Box::new(Self {time, keyboard, world}))
+        let graphics = GraphicsContext::new(window_context);
+
+        Box::leak(Box::new(Self {time, keyboard, graphics}))
     }
 
     pub fn update(&mut self) {
