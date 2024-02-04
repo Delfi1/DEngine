@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
@@ -13,9 +13,16 @@ pub struct GraphicsContext {
     pub memory_allocator: Arc<StandardMemoryAllocator>,
     pub command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     pub descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
+    pub clear_color: [f32; 4],
 
     // Private
-    window_context: &'static mut VulkanoContext
+    window_context: &'static mut VulkanoContext,
+    features: HashSet<Feature>
+}
+
+#[derive(Eq, Hash, PartialEq)]
+pub enum Feature {
+    Depth,
 }
 
 impl GraphicsContext {
@@ -37,10 +44,25 @@ impl GraphicsContext {
             Default::default(),
         ));
 
-        Self {queue, window_context, memory_allocator, command_buffer_allocator, descriptor_set_allocator}
+        let features = HashSet::new();
+
+        let clear_color = [0.0, 0.0, 0.0, 1.0];
+
+        Self {queue, window_context, memory_allocator, clear_color, command_buffer_allocator, descriptor_set_allocator, features}
+    }
+
+    pub fn turn_feature(&mut self, feature: Feature) {
+        if self.features.iter().find(|x| x == &&feature).is_none() {
+            self.features.insert(feature);
+        } else {
+            self.features.remove(&feature);
+        }
+    }
+
+    pub fn is_feature_enabled(&self, feature: Feature) -> bool {
+        self.features.iter().find(|x| x == &&feature).is_some()
     }
 }
-
 
 pub struct TimeContext {
     init_time: Instant,
@@ -74,12 +96,13 @@ impl TimeContext {
 }
 
 pub struct KeyboardContext {
-    pressed_keys: HashSet<VirtualKeyCode>
+    pressed_keys: HashSet<VirtualKeyCode>,
+    just_released_keys: HashSet<VirtualKeyCode>
 }
 
 impl KeyboardContext {
     pub fn new() -> Self {
-        Self {pressed_keys: HashSet::new()}
+        Self {pressed_keys: HashSet::new(), just_released_keys: HashSet::new()}
     }
 
     pub fn is_key_pressed(&self, key: VirtualKeyCode) -> bool {
@@ -88,8 +111,18 @@ impl KeyboardContext {
             .is_some()
     }
 
+    pub fn is_key_just_released(&self, key: VirtualKeyCode) -> bool {
+        self.just_released_keys.iter()
+            .find(|x| x == &&key)
+            .is_some()
+    }
+
     pub fn pressed_keys(&mut self) -> &mut HashSet<VirtualKeyCode> {
         &mut self.pressed_keys
+    }
+
+    pub fn just_released_keys(&mut self) -> &mut HashSet<VirtualKeyCode> {
+        &mut self.just_released_keys
     }
 
     pub fn is_keys_pressed(&self, keys: HashSet<VirtualKeyCode>) -> bool {
@@ -130,5 +163,7 @@ impl EngineContext {
         self.time.frame_time = Instant::now();
         self.time.ticks += 1;
 
+        // Update keyboard context
+        self.keyboard.just_released_keys.clear();
     }
 }

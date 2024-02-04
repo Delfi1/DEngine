@@ -8,13 +8,7 @@
 )]
 
 
-use std::sync::Arc;
 use std::time::{Duration, Instant};
-use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo};
-use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo};
-use vulkano::{sync, Validated, VulkanError};
-use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
-use vulkano::swapchain::SwapchainPresentInfo;
 use vulkano::sync::GpuFuture;
 use winit::event::{ElementState, Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -62,6 +56,7 @@ fn main() {
                             println!("Key \"{:?}\" has been pressed", input.virtual_keycode.unwrap());
                         } else {
                             keyboard.pressed_keys().remove(&input.virtual_keycode.unwrap());
+                            keyboard.just_released_keys().insert(input.virtual_keycode.unwrap());
                             println!("Key \"{:?}\" has been released", input.virtual_keycode.unwrap());
                         }
                     },
@@ -71,7 +66,9 @@ fn main() {
                 }
             },
             Event::RedrawRequested(_) => {
+                let draw_start = Instant::now();
                 app.compute_then_render();
+                //println!("Draw time: {}", Instant::now().duration_since(draw_start).as_secs_f32());
             },
             Event::MainEventsCleared => {
                 app.update_title();
@@ -82,9 +79,13 @@ fn main() {
 
         match *control_flow {
             ControlFlow::Poll => {
+
+                // Update World
+                let phys_delta = 1.0 / app.settings.fps_limit as f64;
+                app.update_world(phys_delta);
+
                 let context = app.get_context();
                 let time = &context.time;
-                //println!("{:?}", delta.as_secs_f32());
 
                 let delta = time.delta();
                 //println!("{:?}", delta);

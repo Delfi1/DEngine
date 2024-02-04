@@ -1,16 +1,13 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferInheritanceInfo, CommandBufferLevel, CommandBufferUsage, PrimaryCommandBufferAbstract, RenderPassBeginInfo, SecondaryAutoCommandBuffer, SubpassBeginInfo, SubpassContents};
-use vulkano::command_buffer::ResourceInCommand::DescriptorSet;
 use vulkano::command_buffer::sys::CommandBufferBeginInfo;
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
-use vulkano::descriptor_set::WriteDescriptorSet;
 use vulkano::device::Queue;
 use vulkano::format::Format;
-use vulkano::image::sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo, SamplerMipmapMode};
 use vulkano::image::view::ImageView;
 use vulkano::memory::allocator::StandardMemoryAllocator;
-use vulkano::pipeline::{ComputePipeline, DynamicState, GraphicsPipeline, Pipeline, PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo};
+use vulkano::pipeline::{ComputePipeline, DynamicState, GraphicsPipeline, Pipeline, PipelineLayout, PipelineShaderStageCreateInfo};
 use vulkano::pipeline::compute::ComputePipelineCreateInfo;
 use vulkano::pipeline::graphics::color_blend::{ColorBlendAttachmentState, ColorBlendState};
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
@@ -19,7 +16,7 @@ use vulkano::pipeline::graphics::multisample::MultisampleState;
 use vulkano::pipeline::graphics::rasterization::RasterizationState;
 use vulkano::pipeline::graphics::vertex_input::VertexInputState;
 use vulkano::pipeline::graphics::viewport::{Viewport, ViewportState};
-use vulkano::pipeline::layout::{PipelineDescriptorSetLayoutCreateInfo, PipelineLayoutCreateInfo};
+use vulkano::pipeline::layout::PipelineDescriptorSetLayoutCreateInfo;
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass};
 use vulkano::sync::GpuFuture;
 
@@ -123,8 +120,7 @@ impl DrawingPipeline {
             PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
                 .into_pipeline_layout_create_info(device.clone())
                 .unwrap(),
-        )
-            .unwrap();
+        ).unwrap();
 
         let pipeline = GraphicsPipeline::new(
             device.clone(),
@@ -156,7 +152,7 @@ impl DrawingPipeline {
     }
 
     /// Draws input `image` over a quad of size -1.0 to 1.0.
-    pub fn draw(&self, viewport_dimensions: [u32; 2], image: Arc<ImageView>) -> Arc<SecondaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>> {
+    pub fn draw(&self, viewport_dimensions: [u32; 2], _image: Arc<ImageView>) -> Arc<SecondaryAutoCommandBuffer<Arc<StandardCommandBufferAllocator>>> {
         let inheritance_info = CommandBufferInheritanceInfo {
             render_pass: Some(self.subpass.clone().into()),
             ..Default::default()
@@ -181,10 +177,6 @@ impl DrawingPipeline {
             .unwrap()
             .bind_pipeline_graphics(self.pipeline.clone())
             .unwrap();
-
-        unsafe {
-            builder.draw(6, 1, 0, 0).unwrap();
-        }
 
         builder.build().unwrap()
     }
@@ -242,6 +234,7 @@ impl PlaceOverFrame {
     pub fn render<F>(
         &self,
         before_future: F,
+        clear_color: [f32; 4],
         view: Arc<ImageView>,
         target: Arc<ImageView>,
     ) -> Box<dyn GpuFuture>
@@ -272,7 +265,7 @@ impl PlaceOverFrame {
         command_buffer_builder
             .begin_render_pass(
                 RenderPassBeginInfo {
-                    clear_values: vec![Some([0.0; 4].into())],
+                    clear_values: vec![Some(clear_color.into())],
                     ..RenderPassBeginInfo::framebuffer(framebuffer)
                 },
                 SubpassBeginInfo {

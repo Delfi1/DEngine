@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
@@ -7,8 +6,7 @@ use cgmath::{Vector3, Zero};
 use vulkano::device::DeviceOwned;
 use vulkano::image::ImageUsage;
 use vulkano::image::view::ImageView;
-use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo};
-use vulkano::swapchain::{PresentMode, Swapchain, SwapchainCreateInfo};
+use vulkano::swapchain::PresentMode;
 use vulkano::sync::GpuFuture;
 use vulkano_util::context::{VulkanoConfig, VulkanoContext};
 use vulkano_util::renderer::{DEFAULT_IMAGE_FORMAT, VulkanoWindowRenderer};
@@ -18,14 +16,14 @@ use winit::event::VirtualKeyCode;
 use winit::event_loop::EventLoop;
 use winit::window::{Fullscreen, Window};
 
-mod world;
+pub mod world;
 
 mod logic;
 use logic::*;
 
 use world::World;
 use world::context::EngineContext;
-
+use world::context::Feature;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub struct EngineSettings {
@@ -133,7 +131,7 @@ impl EngineApplication {
     pub fn match_input(&mut self) {
         let inputs = &mut self.context.keyboard;
 
-        if inputs.is_key_pressed(VirtualKeyCode::F11) {
+        if inputs.is_key_just_released(VirtualKeyCode::F11) {
             let window = self.windows.get_primary_window().unwrap();
 
             let is_full_screen = window.fullscreen().is_some();
@@ -142,13 +140,34 @@ impl EngineApplication {
             } else {
                 None
             });
-            inputs.release_key(Some(VirtualKeyCode::F11));
         }
 
-        if inputs.is_key_pressed(VirtualKeyCode::M) {
+        if inputs.is_key_just_released(VirtualKeyCode::M) {
             let window = self.windows.get_primary_window().unwrap();
             window.set_maximized(!window.is_maximized());
-            inputs.release_key(Some(VirtualKeyCode::M));
+        }
+
+        let graphics = &mut self.context.graphics;
+        // Enable depth
+        if inputs.is_key_pressed(VirtualKeyCode::Numpad1) {
+            graphics.turn_feature(Feature::Depth)
+        }
+
+        if inputs.is_key_pressed(VirtualKeyCode::Space) {
+            let camera = self.world.get_camera();
+
+            camera.velocity += Vector3::new(0.0, 0.10, 0.0)
+        }
+        if inputs.is_key_pressed(VirtualKeyCode::LShift) {
+            let camera = self.world.get_camera();
+
+            camera.velocity -= Vector3::new(0.0, 0.10, 0.0)
+        }
+
+        if inputs.is_key_pressed(VirtualKeyCode::W) {
+            let camera = self.world.get_camera();
+            //camera.velocity += 0.1 * camera.rotation;
+            //println!("{:?}", camera.velocity);
         }
 
         let exit_keys = HashSet::from([VirtualKeyCode::Escape, VirtualKeyCode::LShift]);
@@ -156,6 +175,14 @@ impl EngineApplication {
         if inputs.is_keys_pressed(exit_keys) {
             self.exit()
         }
+    }
+
+    pub fn update_world(&mut self, delta: f64) {
+        self.world.update(&self.context, delta);
+    }
+
+    pub fn get_world(&mut self) -> &mut World {
+        self.world
     }
 
     pub fn update_title(&mut self) {
@@ -209,10 +236,12 @@ impl EngineApplication {
 
         let after_compute = self.compute(image.clone()).join(before_pipeline_future);
 
+        let clear_color = self.context.graphics.clear_color.clone();
+
         // Render the image over the swapchain image, inputting the previous future.
         let after_renderpass_future =
             self.place_over_frame
-                .render(after_compute, image, self.windows.get_primary_renderer_mut().unwrap().swapchain_image_view());
+                .render(after_compute, clear_color, image, self.windows.get_primary_renderer_mut().unwrap().swapchain_image_view());
 
         self.windows.get_primary_renderer_mut().unwrap().present(after_renderpass_future, true);
     }

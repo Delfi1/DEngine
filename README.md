@@ -1,10 +1,16 @@
 <h1 align="center">Delfi Engine</h1>
 
-Simple physics engine. Current version: v0.0.19
+Simple physics engine. Current version: v0.0.20
 
 Dependencies:
 1) [Rust](https://www.rust-lang.org/tools/install)
 2) [Ninja Build](https://ninja-build.org)
+
+Controls:
+WASD - movement;
+F11 - Full Screen;
+M - Maximize window;
+LShift + Esc - exit;
 
 Current Engine structure (Graph):
 ```mermaid
@@ -14,6 +20,8 @@ graph TD;
     App --> Settings;
     App --> MainLoop[Main Loop];
     App --> Context;
+    
+    MainLoop --> ...;
 ```
 
 How Main Loop works:
@@ -25,10 +33,20 @@ graph TD;
     Renderer --> Window;
     Window --> MatchInput[Match Input];
     MatchInput --> UpdateSurface[Update Surface];
-    UpdateSurface --> Update[Update Window\n World];
+    UpdateSurface --> Update["Update Window,\n World, Context"];
     Update --> DrawFrame[Start Drawing Frame];
     DrawFrame --> End;
+    DrawFrame --> ...;
     End --> Start;
+```
+
+Context System:
+```mermaid
+graph TD;
+    Context;
+    Context --> Time;
+    Context --> Graphics;
+    Context --> Keyboard;
 ```
 
 How Render Loop works (Graph):
